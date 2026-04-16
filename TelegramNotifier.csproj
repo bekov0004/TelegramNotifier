@@ -11,6 +11,7 @@
     <Description>Simple Telegram notifier for sending exceptions and logs</Description>
     <PackageTags>telegram;logging;exceptions;notifier</PackageTags>
     <RepositoryUrl>https://github.com/bekov0004/TelegramNotifier</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +19,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting"/>
     <PackageReference Include="Microsoft.Extensions.Http"/>
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"/>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
