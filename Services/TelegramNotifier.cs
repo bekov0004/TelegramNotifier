@@ -66,6 +66,7 @@ public class TelegramNotifier : ITelegramNotifier
     {
         var sb = new System.Text.StringBuilder();
 
+        sb.AppendLine("```");
         sb.AppendLine("========== EXCEPTION REPORT ==========");
         sb.AppendLine($"Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine();
@@ -81,6 +82,7 @@ public class TelegramNotifier : ITelegramNotifier
             sb.AppendLine($"Method: {context.Request.Method}");
             sb.AppendLine();
         }
+        sb.AppendLine("```");
 
         return sb.ToString();
     }
@@ -89,6 +91,7 @@ public class TelegramNotifier : ITelegramNotifier
     {
         var sb = new System.Text.StringBuilder();
 
+        sb.AppendLine("```");
         sb.AppendLine("========== EXCEPTION REPORT ==========");
         sb.AppendLine($"Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine();
@@ -117,6 +120,7 @@ public class TelegramNotifier : ITelegramNotifier
 
         sb.AppendLine();
         sb.AppendLine("========== END ==========");
+        sb.AppendLine("```");
 
         return sb.ToString();
     }

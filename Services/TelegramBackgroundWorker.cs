@@ -1,22 +1,23 @@
 using System.Net.Http.Json;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using TelegramNotifier.Models;
 
 namespace TelegramNotifier.Services;
 
 public class TelegramBackgroundWorker : BackgroundService
 {
-    private readonly TelegramNotifierQueue _queue;
     private readonly TelegramNotifierOptions _options;
     private readonly HttpClient _httpClient;
+    private readonly TelegramNotifierQueue _queue;
 
     public TelegramBackgroundWorker(
         TelegramNotifierQueue queue,
-        TelegramNotifierOptions options,
+        IOptions<TelegramNotifierOptions> options,
         IHttpClientFactory httpClientFactory)
     {
         _queue = queue;
-        _options = options;
+        _options = options.Value;
         _httpClient = httpClientFactory.CreateClient();
     }
 
@@ -46,7 +47,8 @@ public class TelegramBackgroundWorker : BackgroundService
         {
             chat_id = _options.ChatId,
             text = msg.Text,
-            message_thread_id = _options.MessageThreadId
+            message_thread_id = _options.MessageThreadId,
+            parse_mode = "Markdown"
         };
 
         await _httpClient.PostAsJsonAsync(url, payload);
@@ -62,6 +64,7 @@ public class TelegramBackgroundWorker : BackgroundService
         using var form = new MultipartFormDataContent();
 
         form.Add(new StringContent(_options.ChatId), "chat_id");
+        form.Add(new StringContent("Markdown"), "parse_mode");
 
         if (_options.MessageThreadId.HasValue)
         {

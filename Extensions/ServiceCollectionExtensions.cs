@@ -15,7 +15,8 @@ public static class ServiceCollectionExtensions
             configuration.GetSection("TelegramNotifier"));
 
         services.AddSingleton<TelegramNotifierQueue>();
-        services.AddHttpClient<ITelegramNotifier, Services.TelegramNotifier>();
+        services.AddScoped<ITelegramNotifier, Services.TelegramNotifier>();
+        services.AddHttpClient<TelegramBackgroundWorker>(); 
         services.AddHostedService<TelegramBackgroundWorker>();
 
         return services;
