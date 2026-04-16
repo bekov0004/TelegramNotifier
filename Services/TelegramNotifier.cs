@@ -9,13 +9,16 @@ public class TelegramNotifier : ITelegramNotifier
 {
     private readonly HttpClient _httpClient;
     private readonly TelegramNotifierOptions _options;
+    private readonly TelegramNotifierQueue _queue;
 
     public TelegramNotifier(
         HttpClient httpClient,
-        IOptions<TelegramNotifierOptions> options)
+        IOptions<TelegramNotifierOptions> options,
+        TelegramNotifierQueue queue)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _queue = queue;
     }
 
     public async Task SendExceptionAsync(Exception ex, HttpContext? context = null)
@@ -44,6 +47,17 @@ public class TelegramNotifier : ITelegramNotifier
     public async Task SendMessageAsync(string message)
     {
         if (!_options.Enabled) return;
+        
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        await _queue.EnqueueAsync(message);
+    }
+
+    public async Task SendToTelegramAsync(string message)
+    {
+        if (!_options.Enabled) return;
+        
+        if (string.IsNullOrWhiteSpace(message)) return;
 
         try
         {
@@ -53,14 +67,13 @@ public class TelegramNotifier : ITelegramNotifier
             {
                 chat_id = _options.ChatId,
                 text = message,
-                message_thread_id = _options.MessageThreadId // 🔥 ВАЖНО: топики
+                message_thread_id = _options.MessageThreadId
             };
 
             await _httpClient.PostAsJsonAsync(url, payload);
         }
         catch
         {
-            // ❗ не ломаем приложение если Telegram упал
         }
     }
 }
