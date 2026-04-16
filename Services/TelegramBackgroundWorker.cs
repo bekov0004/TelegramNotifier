@@ -19,7 +19,7 @@ public class TelegramBackgroundWorker : BackgroundService
     {
         await foreach (var message in _queue.DequeueAsync(stoppingToken))
         {
-            await _notifier.SendToTelegramAsync(message);
+            await _notifier.ProcessAsync(message);
         }
     }
 }

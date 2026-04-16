@@ -1,4 +1,5 @@
-using System.Net.Http.Json;
+using System.Net.Http.Headers;
+using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using TelegramNotifier.Models;
@@ -10,6 +11,8 @@ public class TelegramNotifier : ITelegramNotifier
     private readonly HttpClient _httpClient;
     private readonly TelegramNotifierOptions _options;
     private readonly TelegramNotifierQueue _queue;
+
+    private const int FILE_THRESHOLD = 2000;
 
     public TelegramNotifier(
         HttpClient httpClient,
@@ -25,55 +28,100 @@ public class TelegramNotifier : ITelegramNotifier
     {
         if (!_options.Enabled) return;
 
-        var message = $@"
-🚨 ERROR
+        var caption = $"🚨 {ex.GetType().Name}: {ex.Message}";
+        var fileContent = BuildExceptionFile(ex, context);
 
-📌 Message:
-{ex.Message}
-
-📍 Path:
-{context?.Request?.Path}
-
-🕒 Time:
-{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}
-
-📚 StackTrace:
-{ex.StackTrace}
-";
-
-        await SendMessageAsync(message);
+        await ProcessAsync($"{caption}\n\n{fileContent}");
     }
 
     public async Task SendMessageAsync(string message)
     {
         if (!_options.Enabled) return;
-        
         if (string.IsNullOrWhiteSpace(message)) return;
 
         await _queue.EnqueueAsync(message);
     }
 
-    public async Task SendToTelegramAsync(string message)
+    public async Task ProcessAsync(string message)
     {
         if (!_options.Enabled) return;
-        
         if (string.IsNullOrWhiteSpace(message)) return;
 
+        if (message.Length > FILE_THRESHOLD)
+        {
+            await SendAsFileAsync("⚠️ Large Message", message);
+        }
+        else
+        {
+            await _queue.EnqueueAsync(message);
+        }
+    }
+
+    private async Task SendAsFileAsync(string caption, string content)
+    {
         try
         {
-            var url = $"https://api.telegram.org/bot{_options.BotToken}/sendMessage";
+            var url = $"https://api.telegram.org/bot{_options.BotToken}/sendDocument";
 
-            var payload = new
+            using var form = new MultipartFormDataContent();
+
+            form.Add(new StringContent(_options.ChatId), "chat_id");
+
+            if (_options.MessageThreadId.HasValue)
             {
-                chat_id = _options.ChatId,
-                text = message,
-                message_thread_id = _options.MessageThreadId
-            };
+                form.Add(new StringContent(_options.MessageThreadId.Value.ToString()), "message_thread_id");
+            }
 
-            await _httpClient.PostAsJsonAsync(url, payload);
+            form.Add(new StringContent(caption), "caption");
+
+            var bytes = Encoding.UTF8.GetBytes(content);
+
+            var file = new ByteArrayContent(bytes);
+            file.Headers.ContentType = MediaTypeHeaderValue.Parse("text/plain");
+
+            form.Add(file, "document", $"log-{DateTime.UtcNow:yyyyMMdd-HHmmss}.txt");
+
+            await _httpClient.PostAsync(url, form);
         }
         catch
         {
+            // ignored
         }
+    }
+
+    private string BuildExceptionFile(Exception ex, HttpContext? context)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("========== EXCEPTION REPORT ==========");
+        sb.AppendLine($"Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine();
+
+        sb.AppendLine("---- SUMMARY ----");
+        sb.AppendLine($"{ex.GetType().Name}: {ex.Message}");
+        sb.AppendLine();
+
+        if (context != null)
+        {
+            sb.AppendLine("---- REQUEST ----");
+            sb.AppendLine($"Path: {context.Request.Path}");
+            sb.AppendLine($"Method: {context.Request.Method}");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("---- STACKTRACE ----");
+        sb.AppendLine(ex.StackTrace);
+
+        if (ex.InnerException != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("---- INNER EXCEPTION ----");
+            sb.AppendLine(ex.InnerException.ToString());
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("========== END ==========");
+
+        return sb.ToString();
     }
 }
