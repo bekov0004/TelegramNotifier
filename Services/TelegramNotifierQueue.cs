@@ -1,18 +1,15 @@
 using System.Threading.Channels;
+using TelegramNotifier.Models;
 
 namespace TelegramNotifier.Services;
 
 public class TelegramNotifierQueue
 {
-    private readonly Channel<string> _queue = Channel.CreateUnbounded<string>();
+    private readonly Channel<TelegramMessage> _queue = Channel.CreateUnbounded<TelegramMessage>();
 
-    public async Task EnqueueAsync(string message)
-    {
-        await _queue.Writer.WriteAsync(message);
-    }
+    public async Task EnqueueAsync(TelegramMessage message)
+        => await _queue.Writer.WriteAsync(message);
 
-    public IAsyncEnumerable<string> DequeueAsync(CancellationToken ct)
-    {
-        return _queue.Reader.ReadAllAsync(ct);
-    }
+    public IAsyncEnumerable<TelegramMessage> DequeueAsync(CancellationToken ct)
+        => _queue.Reader.ReadAllAsync(ct);
 }

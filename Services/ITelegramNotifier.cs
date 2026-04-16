@@ -6,5 +6,4 @@ public interface ITelegramNotifier
 {
     Task SendExceptionAsync(Exception ex, HttpContext context = null);
     Task SendMessageAsync(string message);
-    Task ProcessAsync(string message);
 }
