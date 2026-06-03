@@ -4,6 +4,6 @@ namespace TelegramNotifier.Services;
 
 public interface ITelegramNotifier
 {
-    Task SendExceptionAsync(Exception ex, HttpContext context = null);
+    Task SendExceptionAsync(Exception ex, HttpContext? context = null);
     Task SendMessageAsync(string message);
 }

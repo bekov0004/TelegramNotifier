@@ -51,17 +51,19 @@ public class TelegramBackgroundWorker : BackgroundService
     private Task SendTextAsync(TelegramMessage msg, CancellationToken ct)
     {
         var url = $"https://api.telegram.org/bot{_options.BotToken}/sendMessage";
-        var payload = new
-        {
-            chat_id = _options.ChatId,
-            text = msg.Text,
-            message_thread_id = _options.MessageThreadId,
-            parse_mode = "Markdown"
-        };
 
-        return SendWithRetryAsync("sendMessage",
-            innerCt => _httpClient.PostAsJsonAsync(url, payload, innerCt),
-            ct);
+        return SendWithRetryAsync("sendMessage", innerCt =>
+        {
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(_options.ChatId), "chat_id");
+            form.Add(new StringContent(msg.Text ?? ""), "text");
+            form.Add(new StringContent("Markdown"), "parse_mode");
+
+            if (_options.MessageThreadId.HasValue)
+                form.Add(new StringContent(_options.MessageThreadId.Value.ToString()), "message_thread_id");
+
+            return _httpClient.PostAsync(url, form, innerCt);
+        }, ct);
     }
 
     private Task SendFileAsync(TelegramMessage msg, CancellationToken ct)

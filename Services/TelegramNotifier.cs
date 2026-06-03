@@ -19,11 +19,11 @@ public class TelegramNotifier : ITelegramNotifier
         _queue = queue;
     }
 
-    public async Task SendExceptionAsync(Exception ex, HttpContext context = null)
+    public async Task SendExceptionAsync(Exception ex, HttpContext? context = null)
     {
         if (!_options.Enabled) return;
 
-        var caption = BuildExceptionFileCaption(ex, context);
+        var caption = BuildExceptionCaption(ex, context);
         var fileContent = BuildExceptionFile(ex, context);
 
         await ProcessAsync(fileContent, caption);
@@ -37,7 +37,7 @@ public class TelegramNotifier : ITelegramNotifier
         await ProcessAsync(message, null);
     }
 
-    public async Task ProcessAsync(string content, string caption)
+    private async Task ProcessAsync(string content, string? caption)
     {
         if (!_options.Enabled) return;
         if (string.IsNullOrWhiteSpace(content)) return;
@@ -62,36 +62,19 @@ public class TelegramNotifier : ITelegramNotifier
     }
     
     
-    private string BuildExceptionFileCaption(Exception ex, HttpContext context)
+    private static string BuildExceptionCaption(Exception ex, HttpContext? context)
     {
-        var sb = new System.Text.StringBuilder();
+        var request = context != null
+            ? $" | {context.Request.Method} {context.Request.Path}"
+            : string.Empty;
 
-        sb.AppendLine("```");
-        sb.AppendLine("========== EXCEPTION REPORT ==========");
-        sb.AppendLine($"Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
-        sb.AppendLine();
-
-        sb.AppendLine("---- SUMMARY ----");
-        sb.AppendLine($"{ex.GetType().Name}: {ex.Message}");
-        sb.AppendLine();
-
-        if (context != null)
-        {
-            sb.AppendLine("---- REQUEST ----");
-            sb.AppendLine($"Path: {context.Request.Path}");
-            sb.AppendLine($"Method: {context.Request.Method}");
-            sb.AppendLine();
-        }
-        sb.AppendLine("```");
-
-        return sb.ToString();
+        return $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {ex.GetType().Name}{request}";
     }
 
-    private string BuildExceptionFile(Exception ex, HttpContext context)
+    private static string BuildExceptionFile(Exception ex, HttpContext? context)
     {
         var sb = new System.Text.StringBuilder();
 
-        sb.AppendLine("```");
         sb.AppendLine("========== EXCEPTION REPORT ==========");
         sb.AppendLine($"Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine();
@@ -120,7 +103,6 @@ public class TelegramNotifier : ITelegramNotifier
 
         sb.AppendLine();
         sb.AppendLine("========== END ==========");
-        sb.AppendLine("```");
 
         return sb.ToString();
     }
