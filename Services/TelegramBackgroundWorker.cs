@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -47,10 +48,9 @@ public class TelegramBackgroundWorker : BackgroundService
         }
     }
 
-    private async Task SendTextAsync(TelegramMessage msg, CancellationToken ct)
+    private Task SendTextAsync(TelegramMessage msg, CancellationToken ct)
     {
         var url = $"https://api.telegram.org/bot{_options.BotToken}/sendMessage";
-
         var payload = new
         {
             chat_id = _options.ChatId,
@@ -59,40 +59,88 @@ public class TelegramBackgroundWorker : BackgroundService
             parse_mode = "Markdown"
         };
 
-        var response = await _httpClient.PostAsJsonAsync(url, payload, ct);
+        return SendWithRetryAsync("sendMessage",
+            innerCt => _httpClient.PostAsJsonAsync(url, payload, innerCt),
+            ct);
+    }
 
-        if (!response.IsSuccessStatusCode)
+    private Task SendFileAsync(TelegramMessage msg, CancellationToken ct)
+    {
+        var url = $"https://api.telegram.org/bot{_options.BotToken}/sendDocument";
+        var bytes = System.Text.Encoding.UTF8.GetBytes(msg.FileContent ?? "");
+        var filename = $"log-{DateTime.UtcNow:yyyyMMdd-HHmmss}.txt";
+
+        return SendWithRetryAsync("sendDocument", async innerCt =>
         {
-            var body = await response.Content.ReadAsStringAsync(ct);
-            _logger.LogError("Telegram sendMessage failed with {StatusCode}: {Body}", (int)response.StatusCode, body);
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(_options.ChatId), "chat_id");
+            form.Add(new StringContent("Markdown"), "parse_mode");
+
+            if (_options.MessageThreadId.HasValue)
+                form.Add(new StringContent(_options.MessageThreadId.Value.ToString()), "message_thread_id");
+
+            form.Add(new StringContent(msg.Caption ?? "Log"), "caption");
+
+            var file = new ByteArrayContent(bytes);
+            file.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("text/plain");
+            form.Add(file, "document", filename);
+
+            return await _httpClient.PostAsync(url, form, innerCt);
+        }, ct);
+    }
+
+    private async Task SendWithRetryAsync(
+        string operation,
+        Func<CancellationToken, Task<HttpResponseMessage>> send,
+        CancellationToken ct)
+    {
+        var maxAttempts = _options.MaxRetryCount + 1;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var response = await send(ct);
+
+                if (response.IsSuccessStatusCode)
+                    return;
+
+                var statusCode = (int)response.StatusCode;
+                var isRetryable = statusCode >= 500 || response.StatusCode == HttpStatusCode.TooManyRequests;
+
+                if (!isRetryable || attempt == maxAttempts)
+                {
+                    var body = await response.Content.ReadAsStringAsync(ct);
+                    _logger.LogError("{Operation} failed with {StatusCode}: {Body}", operation, statusCode, body);
+                    return;
+                }
+
+                var delay = GetRetryDelay(response, attempt);
+                _logger.LogWarning("{Operation} returned {StatusCode}, retrying in {Delay}s ({Attempt}/{Max})",
+                    operation, statusCode, delay.TotalSeconds, attempt, maxAttempts);
+
+                await Task.Delay(delay, ct);
+            }
+            catch (HttpRequestException ex) when (attempt < maxAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt - 1));
+                _logger.LogWarning(ex, "{Operation} request failed, retrying in {Delay}s ({Attempt}/{Max})",
+                    operation, delay.TotalSeconds, attempt, maxAttempts);
+                await Task.Delay(delay, ct);
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "{Operation} failed after {Max} attempt(s)", operation, maxAttempts);
+            }
         }
     }
 
-    private async Task SendFileAsync(TelegramMessage msg, CancellationToken ct)
+    private static TimeSpan GetRetryDelay(HttpResponseMessage response, int attempt)
     {
-        var url = $"https://api.telegram.org/bot{_options.BotToken}/sendDocument";
+        if (response.StatusCode == HttpStatusCode.TooManyRequests
+            && response.Headers.RetryAfter?.Delta is { } delta)
+            return delta;
 
-        using var form = new MultipartFormDataContent();
-
-        form.Add(new StringContent(_options.ChatId), "chat_id");
-        form.Add(new StringContent("Markdown"), "parse_mode");
-
-        if (_options.MessageThreadId.HasValue)
-            form.Add(new StringContent(_options.MessageThreadId.Value.ToString()), "message_thread_id");
-
-        form.Add(new StringContent(msg.Caption ?? "Log"), "caption");
-
-        var bytes = System.Text.Encoding.UTF8.GetBytes(msg.FileContent ?? "");
-        var file = new ByteArrayContent(bytes);
-        file.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("text/plain");
-        form.Add(file, "document", $"log-{DateTime.UtcNow:yyyyMMdd-HHmmss}.txt");
-
-        var response = await _httpClient.PostAsync(url, form, ct);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var body = await response.Content.ReadAsStringAsync(ct);
-            _logger.LogError("Telegram sendDocument failed with {StatusCode}: {Body}", (int)response.StatusCode, body);
-        }
+        return TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)); // 1s, 2s, 4s, 8s...
     }
 }

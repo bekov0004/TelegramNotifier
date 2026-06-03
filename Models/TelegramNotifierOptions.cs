@@ -6,4 +6,5 @@ public class TelegramNotifierOptions
     public string ChatId { get; set; } = null!;
     public int? MessageThreadId { get; set; }
     public bool Enabled { get; set; } = true;
+    public int MaxRetryCount { get; set; } = 3;
 }
