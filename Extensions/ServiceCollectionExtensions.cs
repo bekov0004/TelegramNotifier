@@ -8,23 +8,43 @@ namespace TelegramNotifier.Extensions;
 
 public static class ServiceCollectionExtensions
 {
+    // Только из кода
     public static IServiceCollection AddTelegramNotifier(
         this IServiceCollection services,
-        IConfiguration configuration,
-        Action<TelegramNotifierOptions>? configure = null)
+        Action<TelegramNotifierOptions> configure)
     {
-        services.Configure<TelegramNotifierOptions>(
-            configuration.GetSection("TelegramNotifier"));
+        services.Configure<TelegramNotifierOptions>(configure);
+        return services.RegisterServices();
+    }
 
+    // Только из секции appsettings
+    public static IServiceCollection AddTelegramNotifier(
+        this IServiceCollection services,
+        IConfigurationSection section)
+    {
+        services.Configure<TelegramNotifierOptions>(section);
+        return services.RegisterServices();
+    }
+
+    // Секция appsettings + переопределение из кода
+    public static IServiceCollection AddTelegramNotifier(
+        this IServiceCollection services,
+        IConfigurationSection section,
+        Action<TelegramNotifierOptions> configure)
+    {
+        services.Configure<TelegramNotifierOptions>(section);
+        services.PostConfigure<TelegramNotifierOptions>(configure);
+        return services.RegisterServices();
+    }
+
+    private static IServiceCollection RegisterServices(this IServiceCollection services)
+    {
         services.AddOptions<TelegramNotifierOptions>()
             .PostConfigure<IHostEnvironment>((options, env) =>
             {
                 options.ApplicationName ??= env.ApplicationName;
                 options.EnvironmentName ??= env.EnvironmentName;
             });
-
-        if (configure != null)
-            services.PostConfigure<TelegramNotifierOptions>(configure);
 
         services.AddSingleton<TelegramNotifierQueue>();
         services.AddSingleton<TelegramNotifierThrottle>();
