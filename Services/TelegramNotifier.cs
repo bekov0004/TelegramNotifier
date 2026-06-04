@@ -8,21 +8,25 @@ public class TelegramNotifier : ITelegramNotifier
 {
     private readonly TelegramNotifierOptions _options;
     private readonly TelegramNotifierQueue _queue;
+    private readonly TelegramNotifierThrottle _throttle;
 
     private const int FILE_THRESHOLD = 2000;
 
     public TelegramNotifier(
         IOptions<TelegramNotifierOptions> options,
-        TelegramNotifierQueue queue)
+        TelegramNotifierQueue queue,
+        TelegramNotifierThrottle throttle)
     {
         _options = options.Value;
         _queue = queue;
+        _throttle = throttle;
     }
 
     public async Task SendExceptionAsync(Exception ex, HttpContext? context = null)
     {
         if (!_options.Enabled) return;
         if (_options.IsExceptionExcluded(ex)) return;
+        if (_throttle.IsDuplicate(ex)) return;
 
         var caption = BuildExceptionCaption(ex, context);
         var fileContent = BuildExceptionFile(ex, context);

@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
             services.PostConfigure<TelegramNotifierOptions>(configure);
 
         services.AddSingleton<TelegramNotifierQueue>();
+        services.AddSingleton<TelegramNotifierThrottle>();
         services.AddScoped<ITelegramNotifier, Services.TelegramNotifier>();
         services.AddHttpClient(nameof(TelegramBackgroundWorker));
         services.AddHostedService<TelegramBackgroundWorker>();

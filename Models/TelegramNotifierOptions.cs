@@ -9,6 +9,7 @@ public class TelegramNotifierOptions
     public int MaxRetryCount { get; set; } = 3;
 
     public ICollection<Type> ExcludedExceptionTypes { get; set; } = new List<Type>();
+    public TimeSpan DuplicateThrottleWindow { get; set; } = TimeSpan.Zero;
 
     public bool IsExceptionExcluded(Exception ex)
         => ExcludedExceptionTypes.Any(t => t.IsAssignableFrom(ex.GetType()));
