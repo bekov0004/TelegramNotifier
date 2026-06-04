@@ -8,6 +8,9 @@ public class TelegramNotifierOptions
     public bool Enabled { get; set; } = true;
     public int MaxRetryCount { get; set; } = 3;
 
+    public string? ApplicationName { get; set; }
+    public string? EnvironmentName { get; set; }
+
     public ICollection<Type> ExcludedExceptionTypes { get; set; } = new List<Type>();
     public TimeSpan DuplicateThrottleWindow { get; set; } = TimeSpan.Zero;
 

@@ -67,21 +67,40 @@ public class TelegramNotifier : ITelegramNotifier
     }
     
     
-    private static string BuildExceptionCaption(Exception ex, HttpContext? context)
+    private string BuildExceptionCaption(Exception ex, HttpContext? context)
     {
-        var request = context != null
-            ? $" | {context.Request.Method} {context.Request.Path}"
-            : string.Empty;
+        var parts = new List<string>
+        {
+            DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
+        };
 
-        return $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {ex.GetType().Name}{request}";
+        if (!string.IsNullOrEmpty(_options.ApplicationName))
+            parts.Add(_options.ApplicationName);
+
+        if (!string.IsNullOrEmpty(_options.EnvironmentName))
+            parts.Add(_options.EnvironmentName);
+
+        parts.Add(ex.GetType().Name);
+
+        if (context != null)
+            parts.Add($"{context.Request.Method} {context.Request.Path}");
+
+        return string.Join(" | ", parts);
     }
 
-    private static string BuildExceptionFile(Exception ex, HttpContext? context)
+    private string BuildExceptionFile(Exception ex, HttpContext? context)
     {
         var sb = new System.Text.StringBuilder();
 
         sb.AppendLine("========== EXCEPTION REPORT ==========");
         sb.AppendLine($"Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
+
+        if (!string.IsNullOrEmpty(_options.ApplicationName))
+            sb.AppendLine($"App:  {_options.ApplicationName}");
+
+        if (!string.IsNullOrEmpty(_options.EnvironmentName))
+            sb.AppendLine($"Env:  {_options.EnvironmentName}");
+
         sb.AppendLine();
 
         sb.AppendLine("---- SUMMARY ----");

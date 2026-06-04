@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using TelegramNotifier.Models;
 using TelegramNotifier.Services;
 
@@ -14,6 +15,13 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<TelegramNotifierOptions>(
             configuration.GetSection("TelegramNotifier"));
+
+        services.AddOptions<TelegramNotifierOptions>()
+            .PostConfigure<IHostEnvironment>((options, env) =>
+            {
+                options.ApplicationName ??= env.ApplicationName;
+                options.EnvironmentName ??= env.EnvironmentName;
+            });
 
         if (configure != null)
             services.PostConfigure<TelegramNotifierOptions>(configure);
