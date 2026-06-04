@@ -1,26 +1,30 @@
 # TelegramNotifier
 
-A lightweight .NET library for sending logs and exceptions to Telegram with support for queuing and background processing.
+A lightweight .NET library for sending logs and exceptions to Telegram with support for queuing, retries, and background processing.
 
 ---
 
 ## Key Features
 
-* Sending messages to Telegram
-* Automatic exception reporting (`Exception`)
-* Sending long logs as `.txt` files
-* Support for Telegram forum topics (`message_thread_id`)
-* Asynchronous processing via queue (Channel + BackgroundWorker)
-* Formatting logs into a readable view (code blocks)
+- Sending messages to Telegram with log level prefixes
+- Automatic exception reporting via middleware
+- Long messages sent as `.txt` file attachments (> 2000 chars)
+- Support for Telegram forum topics (`MessageThreadId`)
+- Asynchronous queue processing (Channel + BackgroundService)
+- Resilient delivery: exponential backoff + rate-limit handling
+- Exception type filtering
+- Duplicate throttling — suppresses repeated exceptions within a time window
+- App name and environment included in notifications automatically
+- Custom exception formatter
 
 ---
 
 ## Supported Platforms
 
-* .NET 6
-* .NET 7
-* .NET 8
-* .NET 9
+- .NET 6
+- .NET 7
+- .NET 8
+- .NET 9
 
 ---
 
@@ -32,86 +36,97 @@ dotnet add package TelegramNotifier
 
 ---
 
-## Configuration
+## Registration
 
-Add settings to `appsettings.json`:
+Three ways to register — pick the one that fits your setup.
+
+### 1. From code only
+
+```csharp
+builder.Services.AddTelegramNotifier(options =>
+{
+    options.BotToken = "YOUR_BOT_TOKEN";
+    options.ChatId = "-100XXXXXXXXXX";
+    options.Enabled = true;
+});
+```
+
+### 2. From `appsettings.json`
 
 ```json
 {
   "TelegramNotifier": {
     "Enabled": true,
     "BotToken": "YOUR_BOT_TOKEN",
-    "ChatId": "-100XXXXXXXXXX"
+    "ChatId": "-100XXXXXXXXXX",
+    "MessageThreadId": 6
   }
 }
 ```
 
-### Explanations
+```csharp
+builder.Services.AddTelegramNotifier(
+    builder.Configuration.GetSection("TelegramNotifier"));
+```
 
-| Parameter       | Description                                                   |
-| --------------- | ------------------------------------------------------------- |
-| Enabled         | Enables or disables sending to Telegram                       |
-| BotToken        | Your Telegram bot token                                       |
-| ChatId          | ID of the chat or group where messages will be sent           |
-| MessageThreadId | (optional) ID of the group topic, if using forum chats        |
-
----
-
-## 🧠 Important
-
-* `MessageThreadId` is only needed if you have a **group with topics**
-* If it is a regular chat — you can leave it blank
-* Nothing will be sent without `Enabled = true`
----
-
-## Registration
+### 3. From `appsettings.json` + override from code
 
 ```csharp
-builder.Services.AddTelegramNotifier(builder.Configuration);
+builder.Services.AddTelegramNotifier(
+    builder.Configuration.GetSection("TelegramNotifier"),
+    options =>
+    {
+        options.DuplicateThrottleWindow = TimeSpan.FromMinutes(5);
+        options.ExcludedExceptionTypes.Add(typeof(OperationCanceledException));
+    });
 ```
 
 ---
 
-## Usage
+## Configuration options
 
-### Automatic Error Reporting
+| Parameter                | Type              | Default      | Description                                              |
+|--------------------------|-------------------|--------------|----------------------------------------------------------|
+| `BotToken`               | `string`          | —            | Telegram bot token                                       |
+| `ChatId`                 | `string`          | —            | Target chat or group ID                                  |
+| `Enabled`                | `bool`            | `true`       | Master switch — set to `false` to silence all sending    |
+| `MessageThreadId`        | `int?`            | `null`       | Topic ID for forum groups                                |
+| `MaxRetryCount`          | `int`             | `3`          | Max retry attempts on HTTP failure                       |
+| `ApplicationName`        | `string?`         | auto         | App name shown in notifications (auto-filled from host)  |
+| `EnvironmentName`        | `string?`         | auto         | Environment shown in notifications (auto-filled from host)|
+| `DuplicateThrottleWindow`| `TimeSpan`        | `Zero`       | Suppress duplicate exception types within this window    |
+| `ExcludedExceptionTypes` | `ICollection<Type>`| `[]`        | Exception types (and subclasses) to never send           |
+| `ExceptionFormatter`     | `Func<Exception, HttpContext?, string>?` | `null` | Custom formatter for exception body    |
 
-If you plug in the middleware, all unhandled errors will be automatically sent to Telegram:
+---
+
+## Middleware — automatic exception reporting
+
+Add to capture all unhandled exceptions automatically:
+
 ```csharp
 app.UseTelegramNotifier();
 ```
 
 ---
 
-### Sending a Regular Message Manually
-If you need to send a message yourself:
+## Usage
+
+### Send a message with log level
+
 ```csharp
-public class TestController : ControllerBase
-{
-    private readonly ITelegramNotifier _notifier;
-
-    public TestController(ITelegramNotifier notifier)
-    {
-        _notifier = notifier;
-    }
-
-    [HttpGet("send")]
-    public async Task<IActionResult> Send()
-    {
-        await _notifier.SendMessageAsync("Test message");
-        return Ok();
-    }
-}
+await _notifier.SendMessageAsync("Server started");                              // 🟢 [INFO]
+await _notifier.SendMessageAsync("Queue is 80% full", LogLevel.Warning);         // 🟡 [WARN]
+await _notifier.SendMessageAsync("Database unavailable", LogLevel.Error);        // 🔴 [ERROR]
+await _notifier.SendMessageAsync("Service crashed", LogLevel.Critical);          // 🚨 [CRIT]
 ```
 
----
+### Send an exception manually
 
-### Sending an Exception Manually
-If you want to send an exception manually:
 ```csharp
 try
 {
-    throw new Exception("Test exception");
+    // ...
 }
 catch (Exception ex)
 {
@@ -119,86 +134,90 @@ catch (Exception ex)
 }
 ```
 
+### Inject into a controller
+
+```csharp
+public class OrdersController : ControllerBase
+{
+    private readonly ITelegramNotifier _notifier;
+
+    public OrdersController(ITelegramNotifier notifier)
+    {
+        _notifier = notifier;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create(OrderDto dto)
+    {
+        await _notifier.SendMessageAsync($"New order: {dto.Id}", LogLevel.Information);
+        return Ok();
+    }
+}
+```
+
+---
+
+## Exception filtering
+
+Suppress specific exception types (including subclasses):
+
+```csharp
+options.ExcludedExceptionTypes.Add(typeof(OperationCanceledException));
+options.ExcludedExceptionTypes.Add(typeof(BadHttpRequestException));
+```
+
+---
+
+## Duplicate throttling
+
+Prevent the same exception type from flooding Telegram:
+
+```csharp
+options.DuplicateThrottleWindow = TimeSpan.FromMinutes(5);
+```
+
+One notification per exception type per 5 minutes.
+
+---
+
+## Custom exception formatter
+
+Override the default exception body format:
+
+```csharp
+options.ExceptionFormatter = (ex, ctx) =>
+    $"Error: {ex.Message}\nPath: {ctx?.Request.Path}\nTime: {DateTime.UtcNow}";
+```
+
+If the result exceeds 2000 characters it is sent as a `.txt` file — the caption stays auto-generated.
+
 ---
 
 ## Security
 
-* Do not store `BotToken` in open source code
-* Use `appsettings` or environment secrets
+- Never store `BotToken` in source code
+- Use `appsettings.json`, environment variables, or a secrets manager
 
 ---
 
-## 📍 How to get ChatId
+## How to get ChatId
 
-To send messages to Telegram, you need to find out the `ChatId`.
+### Private chat with the bot
 
----
+1. Send any message to your bot
+2. Open: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
+3. Find `"chat": { "id": 123456789 }` — that is your `ChatId`
 
-### 🤖 1. For a private chat with the bot
+### Group
 
-1. Send any message to your bot (e.g., `hi`)
-2. Open in your browser:
+1. Add the bot to the group and send a message
+2. Open the same `getUpdates` URL
+3. Find `"chat": { "id": -1001234567890 }` — group IDs are negative
 
-```
-https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
-```
+### Forum group (topics)
 
-3. Find the field:
+- `ChatId` — the group ID
+- `MessageThreadId` — the topic ID (visible in the URL when you open a topic)
 
-```json
-"chat": {
-  "id": 123456789
-}
-```
-
-👉 this is your `ChatId`
-
----
-
-### 👥 2. For a group
-
-1. Add the bot to the group
-2. Send any message to the group
-3. Open:
-
-```
-https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
-```
-
-4. Find:
-
-```json
-"chat": {
-  "id": -1001234567890
-}
-```
-
-👉 this is the group's `ChatId`
-
----
-
-### 🧵 3. For forum groups (Topics)
-
-If you have a group with topics:
-
-* `ChatId` — is the ID of the entire group
-* `MessageThreadId` — is the ID of the specific topic
-
-Example:
-
-```json
-"message_thread_id": 6
-```
-
----
-
-### ⚠️ Important
-
-* Without a message in the chat, `getUpdates` may show nothing
-* If you are using a webhook — disable it first:
-
-```
-https://api.telegram.org/bot<YOUR_BOT_TOKEN>/deleteWebhook
-```
-
----
+> If `getUpdates` returns nothing, make sure no webhook is set:
+> `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/deleteWebhook`
