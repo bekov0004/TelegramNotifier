@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+
 namespace TelegramNotifier.Models;
 
 public class TelegramNotifierOptions
@@ -10,6 +12,8 @@ public class TelegramNotifierOptions
 
     public string? ApplicationName { get; set; }
     public string? EnvironmentName { get; set; }
+
+    public Func<Exception, HttpContext?, string>? ExceptionFormatter { get; set; }
 
     public ICollection<Type> ExcludedExceptionTypes { get; set; } = new List<Type>();
     public TimeSpan DuplicateThrottleWindow { get; set; } = TimeSpan.Zero;

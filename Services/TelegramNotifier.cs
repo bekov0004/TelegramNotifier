@@ -30,7 +30,7 @@ public class TelegramNotifier : ITelegramNotifier
         if (_throttle.IsDuplicate(ex)) return;
 
         var caption = BuildExceptionCaption(ex, context);
-        var fileContent = BuildExceptionFile(ex, context);
+        var fileContent = _options.ExceptionFormatter?.Invoke(ex, context) ?? BuildExceptionFile(ex, context);
 
         await ProcessAsync(fileContent, caption);
     }
