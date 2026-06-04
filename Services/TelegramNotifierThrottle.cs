@@ -26,6 +26,16 @@ public class TelegramNotifierThrottle
             return true;
 
         _lastSent[key] = now;
+        RemoveStaleEntries(now);
         return false;
+    }
+
+    private void RemoveStaleEntries(DateTime now)
+    {
+        foreach (var key in _lastSent.Keys)
+        {
+            if (_lastSent.TryGetValue(key, out var last) && now - last >= _options.DuplicateThrottleWindow)
+                _lastSent.TryRemove(key, out _);
+        }
     }
 }
