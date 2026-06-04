@@ -34,6 +34,8 @@ A lightweight .NET library for sending logs and exceptions to Telegram with supp
 dotnet add package TelegramNotifier
 ```
 
+> See [CHANGELOG.md](https://github.com/bekov0004/TelegramNotifier/blob/main/CHANGELOG.md) for version history.
+
 ---
 
 ## Registration

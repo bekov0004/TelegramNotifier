@@ -12,6 +12,7 @@
     <PackageTags>telegram;logging;exceptions;notifier</PackageTags>
     <RepositoryUrl>https://github.com/bekov0004/TelegramNotifier</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>See full changelog: https://github.com/bekov0004/TelegramNotifier/blob/main/CHANGELOG.md</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
