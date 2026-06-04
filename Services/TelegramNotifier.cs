@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TelegramNotifier.Models;
 
@@ -34,13 +35,25 @@ public class TelegramNotifier : ITelegramNotifier
         await ProcessAsync(fileContent, caption);
     }
 
-    public async Task SendMessageAsync(string message)
+    public async Task SendMessageAsync(string message, LogLevel level = LogLevel.Information)
     {
         if (!_options.Enabled) return;
         if (string.IsNullOrWhiteSpace(message)) return;
 
-        await ProcessAsync(message, null);
+        var prefix = GetLevelPrefix(level);
+        await ProcessAsync($"{prefix} {message}", null);
     }
+
+    private static string GetLevelPrefix(LogLevel level) => level switch
+    {
+        LogLevel.Trace       => "⬜ `[TRACE]`",
+        LogLevel.Debug       => "🔵 `[DEBUG]`",
+        LogLevel.Information => "🟢 `[INFO]`",
+        LogLevel.Warning     => "🟡 `[WARN]`",
+        LogLevel.Error       => "🔴 `[ERROR]`",
+        LogLevel.Critical    => "🚨 `[CRIT]`",
+        _                    => "`[LOG]`"
+    };
 
     private async Task ProcessAsync(string content, string? caption)
     {
