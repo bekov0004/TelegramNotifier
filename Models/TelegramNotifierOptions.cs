@@ -7,4 +7,9 @@ public class TelegramNotifierOptions
     public int? MessageThreadId { get; set; }
     public bool Enabled { get; set; } = true;
     public int MaxRetryCount { get; set; } = 3;
+
+    public ICollection<Type> ExcludedExceptionTypes { get; set; } = new List<Type>();
+
+    public bool IsExceptionExcluded(Exception ex)
+        => ExcludedExceptionTypes.Any(t => t.IsAssignableFrom(ex.GetType()));
 }

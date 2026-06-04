@@ -9,10 +9,14 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddTelegramNotifier(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        Action<TelegramNotifierOptions>? configure = null)
     {
         services.Configure<TelegramNotifierOptions>(
             configuration.GetSection("TelegramNotifier"));
+
+        if (configure != null)
+            services.PostConfigure<TelegramNotifierOptions>(configure);
 
         services.AddSingleton<TelegramNotifierQueue>();
         services.AddScoped<ITelegramNotifier, Services.TelegramNotifier>();

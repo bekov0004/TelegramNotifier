@@ -22,6 +22,7 @@ public class TelegramNotifier : ITelegramNotifier
     public async Task SendExceptionAsync(Exception ex, HttpContext? context = null)
     {
         if (!_options.Enabled) return;
+        if (_options.IsExceptionExcluded(ex)) return;
 
         var caption = BuildExceptionCaption(ex, context);
         var fileContent = BuildExceptionFile(ex, context);
